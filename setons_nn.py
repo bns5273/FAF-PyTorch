@@ -1,12 +1,11 @@
 import numpy
 import json
 import urllib.request
+# import plotly
 import torch
 import torch.nn as nn
 from math import sqrt
-# import trueskill
 from trueskill import BETA
-from trueskill.backends import cdf
 
 
 def pRating(p):
@@ -44,7 +43,6 @@ url = "https://api.faforever.com/data/gamePlayerStats?" \
       "&filter=game.featuredMod.id==0;" \
               "game.mapVersion.id==560;" \
               "game.validity=='VALID';" \
-              "afterDeviation<100;" \
               "scoreTime>'2000-01-01T12%3A00%3A00Z'" \
       "&page[size]=10000" \
       "&page[number]="
@@ -54,7 +52,7 @@ download = False
 with open('/home/brett/PycharmProjects/data/setons.json', 'r') as infile:
     data = json.loads(infile.read())
 if download:
-    for p in range(43, 60):  # pages. pg 42 was incomplete
+    for p in range(1, 100):  # pages. 87?
         with urllib.request.urlopen(url + str(p)) as j:
             print(url + str(p))
             new = json.loads(j.read())
@@ -63,7 +61,7 @@ if download:
         if new.__len__() == 0:
             break
 
-    with open('setons.json', 'w') as outfile:
+    with open('/home/brett/PycharmProjects/setons.json', 'w') as outfile:
         json.dump(data, outfile)
 
 
@@ -79,6 +77,12 @@ while i < data.__len__() - 1:
         fullGames.append(players)
 
 
+batch_size = 50
+epochs = 1000
+# numpy.random.seed(26)
+torch.set_printoptions(precision=3, linewidth=200)
+
+
 matches = []
 results = []
 estimates = []
@@ -87,84 +91,112 @@ for players in fullGames:
     for player in players:
         i = int(player['startSpot']) - 1
         match[i] = player
-    if validate(match):
-        x = [0, 0, 0, 0, 0, 0, 0, 0]
+
+    if validate(match):                 # null values, player position errors, one win + one loss
+        # 2x4x8
+        r = isWinner(match[0::2])
+        x = [[[0, 0, 0, 0, 0, 0, 0, 0],     # faction, mean
+              [0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0]],
+             [[0, 0, 0, 0, 0, 0, 0, 0],     # faction, dev
+              [0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0],
+              [0, 0, 0, 0, 0, 0, 0, 0]]]
         for i in range(8):
-            x[i] = match[i]['afterMean']
-        matches.append(torch.Tensor(x).float())
-        results.append(isWinner(match[0::2]))
+            f = int(match[i]['faction']) - 1
+            m = match[i]['afterMean']
+            d = match[i]['afterDeviation']
+            x[0][f][i] = m
+            x[1][f][i] = d
+
+        results.append(r)
         estimates.append(trueskill(match))
+        matches.append(torch.Tensor(x))
 
 
-results = torch.Tensor(results).float()
-estimates = numpy.array(estimates)
-print('dl\'ed', data.__len__())
-print('8 pls', fullGames.__len__())
-print('valid', matches.__len__())
+# print('dl\'ed', data.__len__())
+# print('8 pls', fullGames.__len__())
+# print('valid', matches.__len__())
 
 
 # nn
 
-'''
-ReLU        4974
-ReLU6       4973
-LeakyReLU   4960
-Tanh        4959
-RReLU       4736
-Sigmoid     4639
-SELU        4615
-ELU         4540
 
-'''
+# class for reshaping within sequential net
+class View(nn.Module):
+    def __init__(self, *shape):
+        super(View, self).__init__()
+        self.shape = shape
 
-
-# numpy.random.seed(26)
-device = torch.device("cuda:0")
+    def forward(self, input):
+        return input.view(self.shape)
 
 
 net = nn.Sequential(
-    nn.LayerNorm(8, elementwise_affine=False),
-    nn.Linear(8, 16),
+    nn.BatchNorm2d(2),  # Bx2x4x8
+    View(-1, 64),
+    nn.Linear(64, 128),
     nn.ReLU(),
-    nn.Linear(16, 1)
+    nn.Linear(128, 1),
+    View(-1),
+    nn.Sigmoid()
 )
 
+
 loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(net.parameters(), lr=.005)
 
-for i in range(5):
-    for x, y in zip(matches, results):
+
+means = []
+for j in range(epochs):
+    predictions = []
+    for i in range(0, matches.__len__(), batch_size):
+        x = torch.stack(matches[i:i + batch_size])
+        y = torch.Tensor(results[i:i + batch_size])
+
         y_pred = net(x)
-
-        # print(x)
-        # print(y_pred)
-
         loss = loss_fn(y_pred, y)
-
-        net.zero_grad()
-
+        optimizer.zero_grad()
         loss.backward()
+        optimizer.step()
 
-        with torch.no_grad():
-            for param in net.parameters():
-                param -= .008 * param.grad
-        # print(y.item(), y_pred.item())
+        for p, r in zip(y_pred.data, y):
+            predictions.append((float(p) > .5) == r)
+    m = numpy.mean(predictions)
+    means.append(m)
+    print(j, m)
 
-    print(i, loss.item())
-
-
-perf = []
-n = []
-t = []
-for match, mu, r in zip(matches, estimates, results):
-    perf.append(float(net(match)))
-    n.append((float(net(match)) > .5) == r)
-    t.append((float(cdf(mu)) > .5) == r)
-    # print(r.item(), cdf(mu) > .5, float(net(match)) > .5)
-n = numpy.array(n)
-t = numpy.array(t)
+# analysis
 
 for param in net.parameters():
     print(param.data)
-print('trueskill perf: ', t.mean(), numpy.corrcoef(estimates, results)[0][1])
-print('neuralnet perf: ', n.mean(), numpy.corrcoef(perf, results)[0][1])
+
+perf = []
+nnet = []
+tsk = []
+for i in range(0, matches.__len__(), batch_size):
+    x = torch.stack(matches[i:i + batch_size])
+    for p in net(x).data:
+        perf.append(float(p))
+for g, mu, r in zip(perf, estimates, results):
+    nnet.append((g > .5) == r)
+    tsk.append((mu > .0) == r)
+
+
+print('trueskill perf: ', numpy.mean(tsk), numpy.corrcoef(estimates, results)[0][1])
+print('neuralnet perf: ', numpy.mean(nnet), numpy.corrcoef(perf, results)[0][1])
 print('ts | nn', numpy.corrcoef(estimates, perf)[0][1])
+
+# neuralvstrueskill = [plotly.graph_objs.Scatter(
+#     x=estimates,
+#     y=perf,
+#     mode='markers'
+# )]
+netvtime = [plotly.graph_objs.Scatter(
+    x=list(range(means.__len__())),
+    y=means,
+    mode='lines'
+)]
+# plotly.plotly.plot(neuralvstrueskill, filename='neuralvstrueskill')
+plotly.plotly.plot(netvtime, filename='netvtime')
