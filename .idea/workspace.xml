@@ -1,18 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="9e333e25-5bdb-4813-8aaf-e364adbd89f2" name="Default" comment="renamed files for clarity. removed old versions.">
-      <change afterPath="$PROJECT_DIR$/../faf_spocko_stats/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../faf/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../faf/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../faf/leaderboards.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../faf_spocko_stats/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/../faf_spocko_stats/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/torch.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/torch.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/setons_nn.py" beforeDir="false" afterPath="$PROJECT_DIR$/setons_nn.py" afterDir="false" />
-    </list>
+    <list default="true" id="9e333e25-5bdb-4813-8aaf-e364adbd89f2" name="Default" comment="updated readme" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,7 +20,7 @@
     <session id="521668458">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="3" />
+          <entry key="project.closed" value="4" />
           <entry key="project.open.time.0" value="2" />
           <entry key="project.open.time.4" value="1" />
           <entry key="project.opened" value="4" />
@@ -52,57 +41,22 @@
       <usages-collector id="statistics.file.extensions.edit">
         <counts>
           <entry key="dummy" value="23" />
-          <entry key="md" value="726" />
+          <entry key="md" value="749" />
           <entry key="py" value="147" />
-          <entry key="txt" value="72" />
+          <entry key="txt" value="89" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="Markdown" value="726" />
-          <entry key="PLAIN_TEXT" value="95" />
+          <entry key="Markdown" value="749" />
+          <entry key="PLAIN_TEXT" value="112" />
           <entry key="Python" value="147" />
         </counts>
       </usages-collector>
     </session>
   </component>
   <component name="FileEditorManager">
-    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
-        <entry file="file://$PROJECT_DIR$/../faf_spocko_stats/README.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="225">
-              <caret line="15" column="59" selection-start-line="15" selection-start-column="59" selection-end-line="15" selection-end-column="59" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/setons_nn.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="390">
-              <caret line="194" column="4" selection-start-line="194" selection-start-column="4" selection-end-line="194" selection-end-column="4" />
-              <folding>
-                <element signature="e#0#12#0" expanded="true" />
-                <element signature="e#169#216#0" />
-                <element signature="e#243#329#0" />
-                <element signature="e#353#692#0" />
-                <element signature="e#717#1224#0" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/README.md">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="135">
-              <caret line="9" column="28" selection-start-line="9" selection-start-column="28" selection-end-line="9" selection-end-column="28" />
-            </state>
-          </provider>
-        </entry>
-      </file>
-    </leaf>
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -149,8 +103,8 @@
         <option value="$PROJECT_DIR$/mean-dev-fac.py" />
         <option value="$PROJECT_DIR$/mean-dev-fac-2.py" />
         <option value="$PROJECT_DIR$/setons_nn.py" />
-        <option value="$PROJECT_DIR$/README.md" />
         <option value="$PROJECT_DIR$/../faf_spocko_stats/README.md" />
+        <option value="$PROJECT_DIR$/README.md" />
       </list>
     </option>
   </component>
@@ -376,7 +330,21 @@
       <option name="project" value="LOCAL" />
       <updated>1535168771590</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="updated readme">
+      <created>1535169828099</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1535169828099</updated>
+    </task>
+    <task id="LOCAL-00004" summary="updated readme">
+      <created>1535170194262</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1535170194262</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TodoView">
@@ -390,14 +358,13 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="29" width="1159" height="739" extended-state="6" />
-    <editor active="true" />
     <layout>
       <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.21919014" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.24952137" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.329849" />
-      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.49207747" visible="true" weight="0.28020135" />
+      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.49207747" weight="0.28020135" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.39953542" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -454,7 +421,8 @@
     </ignored-roots>
     <MESSAGE value="renamed files for clarity. removed old versions." />
     <MESSAGE value="added leaderboards work" />
-    <option name="LAST_COMMIT_MESSAGE" value="added leaderboards work" />
+    <MESSAGE value="updated readme" />
+    <option name="LAST_COMMIT_MESSAGE" value="updated readme" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -495,9 +463,16 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/README.md">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="195">
+          <caret line="13" column="95" lean-forward="true" selection-start-line="13" selection-start-column="95" selection-end-line="13" selection-end-column="95" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/setons_nn.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="390">
+        <state relative-caret-position="2640">
           <caret line="194" column="4" selection-start-line="194" selection-start-column="4" selection-end-line="194" selection-end-column="4" />
           <folding>
             <element signature="e#0#12#0" expanded="true" />
@@ -506,13 +481,6 @@
             <element signature="e#353#692#0" />
             <element signature="e#717#1224#0" />
           </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/README.md">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="135">
-          <caret line="9" column="28" selection-start-line="9" selection-start-column="28" selection-end-line="9" selection-end-column="28" />
         </state>
       </provider>
     </entry>
