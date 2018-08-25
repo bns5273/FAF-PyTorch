@@ -1,7 +1,7 @@
 import numpy
 import json
 import urllib.request
-# import plotly
+import plotly
 import torch
 import torch.nn as nn
 from math import sqrt
@@ -92,8 +92,8 @@ for players in fullGames:
         i = int(player['startSpot']) - 1
         match[i] = player
 
-    if validate(match):                 # null values, player position errors, one win + one loss
-        # 2x4x8
+    if validate(match):  # check for null values, player position errors, one win + one loss
+        # 2x4x8 -> mean-dev xx faction xx position
         r = isWinner(match[0::2])
         x = [[[0, 0, 0, 0, 0, 0, 0, 0],     # faction, mean
               [0, 0, 0, 0, 0, 0, 0, 0],
