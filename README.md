@@ -13,5 +13,6 @@ The network has two hidden layers of 128 neurons each. I had issues with over-fi
 | correlation | 0.527     | 0.646          |
 
 
-[This is a graph of the improvement of the network over iterations](https://plot.ly/~bsse/29)  
+                          
+[This is a graph of the improvement of the network over iterations](https://plot.ly/~bsse/31)  
 [This graph compares the predictions of this network with the in-game "trueskill" game balancing system](https://plot.ly/~bsse/29)
