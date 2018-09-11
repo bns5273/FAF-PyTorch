@@ -10,14 +10,17 @@ from math import sqrt
 from trueskill import BETA  # == 4.1666_
 
 
+# calculates rating shown in game
 def pRating(p):
     return p['afterMean'] - 3 * p['afterDeviation']
 
 
+# used for validation
 def isWinner(team):
     return max(team[0]['score'], team[1]['score'], team[2]['score'], team[3]['score']) > 0
 
 
+# used for dataset
 def validate(m):
     for p in m:
         if p['afterMean'] is None:
@@ -31,6 +34,7 @@ def validate(m):
     return True
 
 
+# old algorithm for analysis
 def trueskill(m):
     delta_mean = m[0]['afterMean'] + m[2]['afterMean'] + m[4]['afterMean'] + m[6]['afterMean'] - \
                  m[1]['afterMean'] - m[3]['afterMean'] - m[5]['afterMean'] - m[7]['afterMean']
@@ -38,6 +42,16 @@ def trueskill(m):
     dev_b = m[1]['afterDeviation'] + m[3]['afterDeviation'] + m[5]['afterDeviation'] + m[7]['afterDeviation']
     denom = sqrt(2 * (BETA * BETA) + pow(dev_a, 2) + pow(dev_b, 2))
     return delta_mean / denom
+
+
+# class for reshaping within sequential net
+class View(nn.Module):
+    def __init__(self, *shape):
+        super(View, self).__init__()
+        self.shape = shape
+
+    def forward(self, input):
+        return input.view(self.shape)
 
 
 download = False
@@ -53,29 +67,26 @@ url = "https://api.faforever.com/data/gamePlayerStats?" \
 with open('setons.json', 'r') as infile:
     data = json.loads(infile.read())
     if download:
-        for p in range(1, 100):  # pages. 87?
+        for p in range(1, 10):  # pages. 87?
             with urllib.request.urlopen(url + str(p)) as j:
                 print(url + str(p))
-                new = json.loads(j.read())
-                new = new['data']
-                data = data + new
+                data += json.loads(j.read())['data']
             if new.__len__() == 0:
                 break
-
-        with open('/home/brett/PycharmProjects/setons.json', 'w') as outfile:
+        with open('setons.json', 'w') as outfile:
             json.dump(data, outfile)
 
 
 # validating. check that all 8 players are present
 fullGames = []
 i = 0
-while i < data.__len__() - 1:
+while i < len(data) - 1:
     gid = data[i]['relationships']['game']['data']['id']
     players = []
-    while i < data.__len__() - 1 and data[i]['relationships']['game']['data']['id'] == gid:
+    while i < len(data) - 1 and data[i]['relationships']['game']['data']['id'] == gid:
         players.append(data[i]['attributes'])
         i += 1
-    if players.__len__() == 8:
+    if len(players) == 8:
         fullGames.append(players)
 
 
@@ -92,51 +103,39 @@ for players in fullGames:
     if validate(match):  # check for null values, player position errors, one win + one loss
         # 2x4x8 -> mean-dev xx faction xx position
         r = isWinner(match[0::2])
-        x = [[[0, 0, 0, 0, 0, 0, 0, 0],     # faction, mean
+        x = [[[0, 0, 0, 0, 0, 0, 0, 0],     # mean
               [0, 0, 0, 0, 0, 0, 0, 0],
               [0, 0, 0, 0, 0, 0, 0, 0],
               [0, 0, 0, 0, 0, 0, 0, 0]],
-             [[0, 0, 0, 0, 0, 0, 0, 0],     # faction, dev
+             [[0, 0, 0, 0, 0, 0, 0, 0],     # deviation
               [0, 0, 0, 0, 0, 0, 0, 0],
               [0, 0, 0, 0, 0, 0, 0, 0],
               [0, 0, 0, 0, 0, 0, 0, 0]]]
-        for i in range(8):
+        for i in range(8):                  # fill in x
             f = int(match[i]['faction']) - 1
             m = match[i]['afterMean']
             d = match[i]['afterDeviation']
             x[0][f][i] = m
             x[1][f][i] = d
 
+        matches.append(torch.Tensor(x))
         results.append(r)
         estimates.append(trueskill(match))
-        matches.append(torch.Tensor(x))
 
 
-# nn
+''' Neural Network '''
 
 
-# class for reshaping within sequential net
-class View(nn.Module):
-    def __init__(self, *shape):
-        super(View, self).__init__()
-        self.shape = shape
-
-    def forward(self, input):
-        return input.view(self.shape)
-
-
+torch.set_printoptions(precision=3, linewidth=200)
 batch_size = 50
 epochs = 1000
-torch.set_printoptions(precision=3, linewidth=200)
-
 
 net = nn.Sequential(
     nn.BatchNorm2d(2),  # Bx2x4x8
     View(-1, 64),       # 2x4x8 -> 1x1x64
-    nn.Linear(64, 128),
+    nn.Linear(64, 256),
     nn.ReLU(),
-    nn.ReLU(),
-    nn.Linear(128, 1),
+    nn.Linear(256, 1),
     View(-1),           # 1x1 int array -> int
     nn.Sigmoid()        # output layer
 )
@@ -175,7 +174,7 @@ for j in range(epochs):
     print(j, graph_correlation[-1], graph_percentage[-1])
 
 
-# analysis
+''' Analysis '''
 
 # for param in net.parameters():
 #     print(param.data)
@@ -203,3 +202,17 @@ netvtime = [
 ]
 py.plot(neuralvstrueskill, filename='neuralvstrueskill')
 py.plot(netvtime, filename='netvtime')
+
+
+''' Sample Run
+...
+991 0.8060715615922716 0.876
+992 0.8199941876423973 0.894
+993 0.7993714253661719 0.887
+994 0.7906700729068843 0.876
+995 0.7995814782414301 0.881
+996 0.8033774755990155 0.886
+997 0.8021298825142557 0.886
+998 0.7814543142488423 0.873
+999 0.7968182301139993 0.886
+'''
