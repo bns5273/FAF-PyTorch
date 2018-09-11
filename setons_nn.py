@@ -186,13 +186,22 @@ for j in range(epochs):
 # for param in net.parameters():
 #     print(param.data)
 
-neuralvstrueskill = [
-    go.Scatter(
+vsTrueskill = [
+    go.Histogram(
+        name='TrueSkill',
         x=testing_trueskill,
-        y=predictions,
-        mode='markers'
+        opacity=.75
+    ),
+    go.Histogram(
+        name='Neural Network',
+        x=predictions,
+        opacity=.75
     )
 ]
+layout = go.Layout(barmode='overlay')
+fig = go.Figure(data=vsTrueskill, layout=layout)
+py.plot(fig, filename='neuralvstrueskill')
+
 netvtime = [
     go.Scatter(
         name='percentage',
@@ -219,7 +228,6 @@ netvtime = [
         mode='lines'
     )
 ]
-py.plot(neuralvstrueskill, filename='neuralvstrueskill')
 py.plot(netvtime, filename='netvtime')
 
 
