@@ -9,8 +9,8 @@ The network has two hidden layers of 128 neurons each. Due to there being multip
 
 | Aspect      | TrueSkill | Neural Network |
 | ----------- | --------- | -------------- |
-| percentage  | 0.768     | 0.886          |
-| correlation | 0.527     | 0.797          |
+| percentage  | 0.768     | 0.910          |
+| correlation | 0.527     | 0.841          |
 
 
                           

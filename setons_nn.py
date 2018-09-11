@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from math import sqrt
 from trueskill import BETA  # == 4.1666_
+from trueskill.backends import cdf
 
 
 # calculates rating shown in game
@@ -120,7 +121,7 @@ for players in fullGames:
 
         matches.append(torch.Tensor(x))
         results.append(r)
-        estimates.append(trueskill(match))
+        estimates.append(cdf(trueskill(match)))
 
 
 ''' Neural Network '''
@@ -128,7 +129,7 @@ for players in fullGames:
 
 torch.set_printoptions(precision=3, linewidth=200)
 batch_size = 50
-epochs = 1000
+epochs = 500
 
 net = nn.Sequential(
     nn.BatchNorm2d(2),  # Bx2x4x8
@@ -145,6 +146,8 @@ optimizer = torch.optim.Adam(net.parameters(), lr=.005)
 
 graph_correlation = []
 graph_percentage = []
+graph_ts_correlation = []
+graph_ts_percentage = []
 for j in range(epochs):
     training_data, training_results = zip(*random.sample(list(zip(matches, results)), 40000))
     testing_data, testing_results, testing_trueskill = zip(*random.sample(list(zip(matches, results, estimates)), 1000))
@@ -162,16 +165,20 @@ for j in range(epochs):
 
     # testing
     predictions = []
-    coin_predic = []
+    coin_predict = []
+    coin_ts_predict = []
     for t in range(0, len(testing_data), batch_size):
         x = torch.stack(testing_data[t:t + batch_size])
         predictions += list(net(x).data)
-    for p, r in zip(predictions, testing_results):
-        coin_predic.append((p.data > .5) == r)
+    for p, t, r in zip(predictions, testing_trueskill, testing_results):
+        coin_predict.append((p.data > .5) == r)
+        coin_ts_predict.append((t > .5) == r)
 
     graph_correlation.append(np.corrcoef(predictions, testing_results)[0][1])
-    graph_percentage.append(np.mean(coin_predic))
-    print(j, graph_correlation[-1], graph_percentage[-1])
+    graph_percentage.append(np.mean(coin_predict))
+    graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_results)[0][1])
+    graph_ts_percentage.append(np.mean(coin_ts_predict))
+    print(j, graph_percentage[-1], graph_correlation[-1])
 
 
 ''' Analysis '''
@@ -198,6 +205,18 @@ netvtime = [
         x=list(range(len(graph_correlation))),
         y=graph_correlation,
         mode='lines'
+    ),
+    go.Scatter(
+        name='trueskill percentage',
+        x=list(range(len(graph_percentage))),
+        y=graph_ts_percentage,
+        mode='lines'
+    ),
+    go.Scatter(
+        name='trueskill correlation',
+        x=list(range(len(graph_correlation))),
+        y=graph_ts_correlation,
+        mode='lines'
     )
 ]
 py.plot(neuralvstrueskill, filename='neuralvstrueskill')
@@ -206,13 +225,13 @@ py.plot(netvtime, filename='netvtime')
 
 ''' Sample Run
 ...
-991 0.8060715615922716 0.876
-992 0.8199941876423973 0.894
-993 0.7993714253661719 0.887
-994 0.7906700729068843 0.876
-995 0.7995814782414301 0.881
-996 0.8033774755990155 0.886
-997 0.8021298825142557 0.886
-998 0.7814543142488423 0.873
-999 0.7968182301139993 0.886
+491 0.912 0.8488968814028814
+492 0.887 0.796355651765359
+493 0.92 0.8546175814834017
+494 0.906 0.8338445591501401
+495 0.901 0.8343490898674357
+496 0.899 0.8295045544916277
+497 0.906 0.8286187419581098
+498 0.904 0.8364858446798663
+499 0.91 0.8412758365749676
 '''
