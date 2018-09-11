@@ -1,11 +1,13 @@
-import numpy
+import numpy as np
+import random
 import json
 import urllib.request
-import plotly
+import plotly.graph_objs as go
+import plotly.plotly as py
 import torch
 import torch.nn as nn
 from math import sqrt
-from trueskill import BETA
+from trueskill import BETA  # == 4.1666_
 
 
 def pRating(p):
@@ -38,6 +40,8 @@ def trueskill(m):
     return delta_mean / denom
 
 
+download = False
+
 url = "https://api.faforever.com/data/gamePlayerStats?" \
       "fields[gamePlayerStats]=afterDeviation,afterMean,faction,score,startSpot,game" \
       "&filter=game.featuredMod.id==0;" \
@@ -46,25 +50,23 @@ url = "https://api.faforever.com/data/gamePlayerStats?" \
               "scoreTime>'2000-01-01T12%3A00%3A00Z'" \
       "&page[size]=10000" \
       "&page[number]="
-
-download = False
-
-with open('/home/brett/PycharmProjects/data/setons.json', 'r') as infile:
+with open('setons.json', 'r') as infile:
     data = json.loads(infile.read())
-if download:
-    for p in range(1, 100):  # pages. 87?
-        with urllib.request.urlopen(url + str(p)) as j:
-            print(url + str(p))
-            new = json.loads(j.read())
-            new = new['data']
-            data = data + new
-        if new.__len__() == 0:
-            break
+    if download:
+        for p in range(1, 100):  # pages. 87?
+            with urllib.request.urlopen(url + str(p)) as j:
+                print(url + str(p))
+                new = json.loads(j.read())
+                new = new['data']
+                data = data + new
+            if new.__len__() == 0:
+                break
 
-    with open('/home/brett/PycharmProjects/setons.json', 'w') as outfile:
-        json.dump(data, outfile)
+        with open('/home/brett/PycharmProjects/setons.json', 'w') as outfile:
+            json.dump(data, outfile)
 
 
+# validating. check that all 8 players are present
 fullGames = []
 i = 0
 while i < data.__len__() - 1:
@@ -77,12 +79,7 @@ while i < data.__len__() - 1:
         fullGames.append(players)
 
 
-batch_size = 50
-epochs = 1000
-# numpy.random.seed(26)
-torch.set_printoptions(precision=3, linewidth=200)
-
-
+# validating
 matches = []
 results = []
 estimates = []
@@ -115,11 +112,6 @@ for players in fullGames:
         matches.append(torch.Tensor(x))
 
 
-# print('dl\'ed', data.__len__())
-# print('8 pls', fullGames.__len__())
-# print('valid', matches.__len__())
-
-
 # nn
 
 
@@ -133,27 +125,35 @@ class View(nn.Module):
         return input.view(self.shape)
 
 
+batch_size = 50
+epochs = 1000
+torch.set_printoptions(precision=3, linewidth=200)
+
+
 net = nn.Sequential(
     nn.BatchNorm2d(2),  # Bx2x4x8
-    View(-1, 64),
+    View(-1, 64),       # 2x4x8 -> 1x1x64
     nn.Linear(64, 128),
     nn.ReLU(),
+    nn.ReLU(),
     nn.Linear(128, 1),
-    View(-1),
-    nn.Sigmoid()
+    View(-1),           # 1x1 int array -> int
+    nn.Sigmoid()        # output layer
 )
-
 
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=.005)
 
-
-means = []
+graph_correlation = []
+graph_percentage = []
 for j in range(epochs):
-    predictions = []
-    for i in range(0, matches.__len__(), batch_size):
-        x = torch.stack(matches[i:i + batch_size])
-        y = torch.Tensor(results[i:i + batch_size])
+    training_data, training_results = zip(*random.sample(list(zip(matches, results)), 40000))
+    testing_data, testing_results, testing_trueskill = zip(*random.sample(list(zip(matches, results, estimates)), 1000))
+
+    # training
+    for i in range(0, len(training_data), batch_size):
+        x = torch.stack(training_data[i:i + batch_size])
+        y = torch.Tensor(training_results[i:i + batch_size])
 
         y_pred = net(x)
         loss = loss_fn(y_pred, y)
@@ -161,42 +161,45 @@ for j in range(epochs):
         loss.backward()
         optimizer.step()
 
-        for p, r in zip(y_pred.data, y):
-            predictions.append((float(p) > .5) == r)
-    m = numpy.mean(predictions)
-    means.append(m)
-    print(j, m)
+    # testing
+    predictions = []
+    coin_predic = []
+    for t in range(0, len(testing_data), batch_size):
+        x = torch.stack(testing_data[t:t + batch_size])
+        predictions += list(net(x).data)
+    for p, r in zip(predictions, testing_results):
+        coin_predic.append((p.data > .5) == r)
+
+    graph_correlation.append(np.corrcoef(predictions, testing_results)[0][1])
+    graph_percentage.append(np.mean(coin_predic))
+    print(j, graph_correlation[-1], graph_percentage[-1])
+
 
 # analysis
 
-for param in net.parameters():
-    print(param.data)
+# for param in net.parameters():
+#     print(param.data)
 
-perf = []
-nnet = []
-tsk = []
-for i in range(0, matches.__len__(), batch_size):
-    x = torch.stack(matches[i:i + batch_size])
-    for p in net(x).data:
-        perf.append(float(p))
-for g, mu, r in zip(perf, estimates, results):
-    nnet.append((g > .5) == r)
-    tsk.append((mu > .0) == r)
-
-
-print('trueskill perf: ', numpy.mean(tsk), numpy.corrcoef(estimates, results)[0][1])
-print('neuralnet perf: ', numpy.mean(nnet), numpy.corrcoef(perf, results)[0][1])
-print('ts | nn', numpy.corrcoef(estimates, perf)[0][1])
-
-# neuralvstrueskill = [plotly.graph_objs.Scatter(
-#     x=estimates,
-#     y=perf,
-#     mode='markers'
-# )]
-netvtime = [plotly.graph_objs.Scatter(
-    x=list(range(means.__len__())),
-    y=means,
-    mode='lines'
-)]
-# plotly.plotly.plot(neuralvstrueskill, filename='neuralvstrueskill')
-plotly.plotly.plot(netvtime, filename='netvtime')
+neuralvstrueskill = [
+    go.Scatter(
+        x=testing_trueskill,
+        y=predictions,
+        mode='markers'
+    )
+]
+netvtime = [
+    go.Scatter(
+        name='percentage',
+        x=list(range(len(graph_percentage))),
+        y=graph_percentage,
+        mode='lines'
+    ),
+    go.Scatter(
+        name='correlation',
+        x=list(range(len(graph_correlation))),
+        y=graph_correlation,
+        mode='lines'
+    )
+]
+py.plot(neuralvstrueskill, filename='neuralvstrueskill')
+py.plot(netvtime, filename='netvtime')
