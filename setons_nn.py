@@ -3,7 +3,7 @@ import random
 import json
 import plotly.graph_objs as go
 import plotly.plotly as py
-import torch
+import torch as torch
 import torch.nn as nn
 from math import sqrt
 from trueskill import BETA  # == 4.1666_
@@ -94,7 +94,7 @@ for players in fullGames:
             x[0][f][i] = m
             x[1][f][i] = d
 
-        matches.append(torch.Tensor(x))
+        matches.append(torch.FloatTensor(x))
         results.append(r)
         estimates.append(cdf(trueskill(match)))
 
@@ -161,13 +161,22 @@ for j in range(epochs):
 # for param in net.parameters():
 #     print(param.data)
 
-neuralvstrueskill = [
-    go.Scatter(
+vsTrueskill = [
+    go.Histogram(
+        name='TrueSkill',
         x=testing_trueskill,
-        y=predictions,
-        mode='markers'
+        opacity=.75
+    ),
+    go.Histogram(
+        name='Neural Network',
+        x=predictions,
+        opacity=.75
     )
 ]
+layout = go.Layout(barmode='overlay')
+fig = go.Figure(data=vsTrueskill, layout=layout)
+py.plot(fig, filename='neuralvstrueskill')
+
 netvtime = [
     go.Scatter(
         name='percentage',
@@ -194,7 +203,6 @@ netvtime = [
         mode='lines'
     )
 ]
-py.plot(neuralvstrueskill, filename='neuralvstrueskill')
 py.plot(netvtime, filename='netvtime')
 
 
