@@ -1,7 +1,6 @@
 import numpy as np
 import random
 import json
-import urllib.request
 import plotly.graph_objs as go
 import plotly.plotly as py
 import torch
@@ -9,11 +8,6 @@ import torch.nn as nn
 from math import sqrt
 from trueskill import BETA  # == 4.1666_
 from trueskill.backends import cdf
-
-
-# calculates rating shown in game
-def pRating(p):
-    return p['afterMean'] - 3 * p['afterDeviation']
 
 
 # used for validation
@@ -28,9 +22,9 @@ def validate(m):
             return False
         if p['faction'] > 4:
             return False
-    if match.__contains__(0):           # needed for some entries where 2 players possess same spot?
+    if m.__contains__(0):           # needed for some entries where 2 players possess same spot?
         return False
-    if isWinner(match[0::2]) == isWinner(match[1::2]):
+    if isWinner(m[0::2]) == isWinner(m[1::2]):
         return False
     return True
 
@@ -55,30 +49,11 @@ class View(nn.Module):
         return input.view(self.shape)
 
 
-download = False
-
-url = "https://api.faforever.com/data/gamePlayerStats?" \
-      "fields[gamePlayerStats]=afterDeviation,afterMean,faction,score,startSpot,game" \
-      "&filter=game.featuredMod.id==0;" \
-              "game.mapVersion.id==560;" \
-              "game.validity=='VALID';" \
-              "scoreTime>'2000-01-01T12%3A00%3A00Z'" \
-      "&page[size]=10000" \
-      "&page[number]="
 with open('setons.json', 'r') as infile:
     data = json.loads(infile.read())
-    if download:
-        for p in range(1, 10):  # pages. 87?
-            with urllib.request.urlopen(url + str(p)) as j:
-                print(url + str(p))
-                data += json.loads(j.read())['data']
-            if new.__len__() == 0:
-                break
-        with open('setons.json', 'w') as outfile:
-            json.dump(data, outfile)
 
 
-# validating. check that all 8 players are present
+# validating. check that all 8 players are present. order into fullGames
 fullGames = []
 i = 0
 while i < len(data) - 1:
@@ -149,13 +124,13 @@ graph_percentage = []
 graph_ts_correlation = []
 graph_ts_percentage = []
 for j in range(epochs):
-    training_data, training_results = zip(*random.sample(list(zip(matches, results)), 40000))
-    testing_data, testing_results, testing_trueskill = zip(*random.sample(list(zip(matches, results, estimates)), 1000))
+    training_data, training_labels = zip(*random.sample(list(zip(matches, results)), 40000))
+    testing_data, testing_labels, testing_trueskill = zip(*random.sample(list(zip(matches, results, estimates)), 1000))
 
     # training
     for i in range(0, len(training_data), batch_size):
         x = torch.stack(training_data[i:i + batch_size])
-        y = torch.Tensor(training_results[i:i + batch_size])
+        y = torch.Tensor(training_labels[i:i + batch_size])
 
         y_pred = net(x)
         loss = loss_fn(y_pred, y)
@@ -170,13 +145,13 @@ for j in range(epochs):
     for t in range(0, len(testing_data), batch_size):
         x = torch.stack(testing_data[t:t + batch_size])
         predictions += list(net(x).data)
-    for p, t, r in zip(predictions, testing_trueskill, testing_results):
+    for p, t, r in zip(predictions, testing_trueskill, testing_labels):
         coin_predict.append((p.data > .5) == r)
         coin_ts_predict.append((t > .5) == r)
 
-    graph_correlation.append(np.corrcoef(predictions, testing_results)[0][1])
+    graph_correlation.append(np.corrcoef(predictions, testing_labels)[0][1])
     graph_percentage.append(np.mean(coin_predict))
-    graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_results)[0][1])
+    graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_labels)[0][1])
     graph_ts_percentage.append(np.mean(coin_ts_predict))
     print(j, graph_percentage[-1], graph_correlation[-1])
 
