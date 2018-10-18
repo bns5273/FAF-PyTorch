@@ -1,42 +1,32 @@
-import numpy as np
+from numpy import mean
+import pandas as pd
 import random
 import json
+import matplotlib as plt
 import plotly.graph_objs as go
 import plotly.plotly as py
-import torch as torch
+import torch
 import torch.nn as nn
-from math import sqrt
-from trueskill import BETA  # == 4.1666_
-from trueskill.backends import cdf
+from torch.utils.data import Dataset, DataLoader
 
 
-# used for validation
-def isWinner(team):
-    return max(team[0]['score'], team[1]['score'], team[2]['score'], team[3]['score']) > 0
+# determines the winning team based on player scores
+def winner(team):
+    return max([team[x]['score'] for x in range(4)]) > 0
 
 
-# used for dataset
-def validate(m):
-    for p in m:
-        if p['afterMean'] is None:
+# confirms a match as valid
+def validate(players):
+    for player in players:
+        if player is None:                  # player not present
             return False
-        if p['faction'] > 4:
+        if player['afterMean'] is None:     # not rated
             return False
-    if m.__contains__(0):           # needed for some entries where 2 players possess same spot?
-        return False
-    if isWinner(m[0::2]) == isWinner(m[1::2]):
+        if player['faction'] > 4:           # modded faction
+            return False
+    if winner(players[0::2]) == winner(players[1::2]):  # corrupt replay
         return False
     return True
-
-
-# old algorithm for analysis
-def trueskill(m):
-    delta_mean = m[0]['afterMean'] + m[2]['afterMean'] + m[4]['afterMean'] + m[6]['afterMean'] - \
-                 m[1]['afterMean'] - m[3]['afterMean'] - m[5]['afterMean'] - m[7]['afterMean']
-    dev_a = m[0]['afterDeviation'] + m[2]['afterDeviation'] + m[4]['afterDeviation'] + m[6]['afterDeviation']
-    dev_b = m[1]['afterDeviation'] + m[3]['afterDeviation'] + m[5]['afterDeviation'] + m[7]['afterDeviation']
-    denom = sqrt(2 * (BETA * BETA) + pow(dev_a, 2) + pow(dev_b, 2))
-    return delta_mean / denom
 
 
 # class for reshaping within sequential net
@@ -49,69 +39,69 @@ class View(nn.Module):
         return input.view(self.shape)
 
 
-with open('setons.json', 'r') as infile:
-    data = json.loads(infile.read())
+class SetonsDataset(Dataset):
+    def __init__(self, filename):
+        print('reading...')
+        self.data = []
+        file = open(filename, 'r').read()
+        df = pd.DataFrame.from_dict(json.loads(file))
+        games = list(df.groupby(
+            df.relationships.apply(lambda x: x['game']['data']['id']),
+            sort=False))
+
+        print('ingesting...')
+        for game in games:
+            gid, frame = game
+            players = [None] * 8
+            for a, i, r, t in frame.values:
+                position = a['startSpot'] - 1
+                players[position] = a
+            if validate(players):
+                # 2x4x8 -> mean-dev xx faction xx position
+                x = [[[0, 0, 0, 0, 0, 0, 0, 0],  # mean
+                      [0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0]],
+                     [[0, 0, 0, 0, 0, 0, 0, 0],  # deviation
+                      [0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0]]]
+                y = winner(players[0::2])
+                for i in range(8):  # fill in x
+                    f = players[i]['faction'] - 1
+                    m = players[i]['afterMean']
+                    d = players[i]['afterDeviation']
+                    x[0][f][i] = m
+                    x[1][f][i] = d
+                self.data.append((torch.FloatTensor(x), y))
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
 
 
-# validating. check that all 8 players are present. order into fullGames
-fullGames = []
-i = 0
-while i < len(data) - 1:
-    gid = data[i]['relationships']['game']['data']['id']
-    players = []
-    while i < len(data) - 1 and data[i]['relationships']['game']['data']['id'] == gid:
-        players.append(data[i]['attributes'])
-        i += 1
-    if len(players) == 8:
-        fullGames.append(players)
+# CUDA for PyTorch
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:0" if use_cuda else "cpu")
+print('cuda: ', use_cuda)
 
+torch.set_printoptions(threshold=5000, precision=3, linewidth=200)
+data = SetonsDataset('setons.json')
+head = data[0]
+print(len(data), 'matches')
+print(head)
 
-# validating
-matches = []
-results = []
-estimates = []
-for players in fullGames:
-    match = [0, 0, 0, 0, 0, 0, 0, 0]
-    for player in players:
-        i = int(player['startSpot']) - 1
-        match[i] = player
-
-    if validate(match):  # check for null values, player position errors, one win + one loss
-        # 2x4x8 -> mean-dev xx faction xx position
-        r = isWinner(match[0::2])
-        x = [[[0, 0, 0, 0, 0, 0, 0, 0],     # mean
-              [0, 0, 0, 0, 0, 0, 0, 0],
-              [0, 0, 0, 0, 0, 0, 0, 0],
-              [0, 0, 0, 0, 0, 0, 0, 0]],
-             [[0, 0, 0, 0, 0, 0, 0, 0],     # deviation
-              [0, 0, 0, 0, 0, 0, 0, 0],
-              [0, 0, 0, 0, 0, 0, 0, 0],
-              [0, 0, 0, 0, 0, 0, 0, 0]]]
-        for i in range(8):                  # fill in x
-            f = int(match[i]['faction']) - 1
-            m = match[i]['afterMean']
-            d = match[i]['afterDeviation']
-            x[0][f][i] = m
-            x[1][f][i] = d
-
-        matches.append(torch.FloatTensor(x))
-        results.append(r)
-        estimates.append(cdf(trueskill(match)))
-
-
-''' Neural Network '''
-
-
-torch.set_printoptions(precision=3, linewidth=200)
-batch_size = 50
-epochs = 500
+epochs = 50
+training_gen = DataLoader(data, batch_size=50, shuffle=True, num_workers=2)
 
 net = nn.Sequential(
     nn.BatchNorm2d(2),  # Bx2x4x8
     View(-1, 64),       # 2x4x8 -> 1x1x64
-    nn.Linear(64, 256),
+    nn.Linear(64, 128),
     nn.ReLU(),
-    nn.Linear(256, 1),
+    nn.Linear(128, 1),
     View(-1),           # 1x1 int array -> int
     nn.Sigmoid()        # output layer
 )
@@ -119,91 +109,91 @@ net = nn.Sequential(
 loss_fn = nn.MSELoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=.005)
 
-graph_correlation = []
-graph_percentage = []
-graph_ts_correlation = []
-graph_ts_percentage = []
-for j in range(epochs):
-    training_data, training_labels = zip(*random.sample(list(zip(matches, results)), 40000))
-    testing_data, testing_labels, testing_trueskill = zip(*random.sample(list(zip(matches, results, estimates)), 1000))
+# graph_correlation = []
+# graph_percentage = []
+# graph_ts_correlation = []
+# graph_ts_percentage = []
+# for j in range(epochs):
+#     training_data, training_labels = zip(*random.sample(list(zip(matches, results)), 40000))
+#     testing_data, testing_labels = zip(*random.sample(list(zip(matches, results)), 1000))
+#
+#     # training
+#     for i in range(0, len(training_data), batch_size):
+#         x = torch.stack(training_data[i:i + batch_size])
+#         y = torch.Tensor(training_labels[i:i + batch_size])
+#
+#         y_pred = net(x)
+#         loss = loss_fn(y_pred, y)
+#         optimizer.zero_grad()
+#         loss.backward()
+#         optimizer.step()
+#
+#     # testing
+#     predictions = []
+#     coin_predict = []
+#     coin_ts_predict = []
+#     for t in range(0, len(testing_data), batch_size):
+#         x = torch.stack(testing_data[t:t + batch_size])
+#         predictions += list(net(x).data)
+#     for p, t, r in zip(predictions, testing_trueskill, testing_labels):
+#         coin_predict.append((p.data > .5) == r)
+#         coin_ts_predict.append((t > .5) == r)
+#
+#     graph_correlation.append(np.corrcoef(predictions, testing_labels)[0][1])
+#     graph_percentage.append(np.mean(coin_predict))
+#     graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_labels)[0][1])
+#     graph_ts_percentage.append(np.mean(coin_ts_predict))
+#     print(j, graph_percentage[-1], graph_correlation[-1])
 
-    # training
-    for i in range(0, len(training_data), batch_size):
-        x = torch.stack(training_data[i:i + batch_size])
-        y = torch.Tensor(training_labels[i:i + batch_size])
 
-        y_pred = net(x)
-        loss = loss_fn(y_pred, y)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    # testing
-    predictions = []
-    coin_predict = []
-    coin_ts_predict = []
-    for t in range(0, len(testing_data), batch_size):
-        x = torch.stack(testing_data[t:t + batch_size])
-        predictions += list(net(x).data)
-    for p, t, r in zip(predictions, testing_trueskill, testing_labels):
-        coin_predict.append((p.data > .5) == r)
-        coin_ts_predict.append((t > .5) == r)
-
-    graph_correlation.append(np.corrcoef(predictions, testing_labels)[0][1])
-    graph_percentage.append(np.mean(coin_predict))
-    graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_labels)[0][1])
-    graph_ts_percentage.append(np.mean(coin_ts_predict))
-    print(j, graph_percentage[-1], graph_correlation[-1])
-
-
-''' Analysis '''
-
-# for param in net.parameters():
-#     print(param.data)
-
-vsTrueskill = [
-    go.Histogram(
-        name='TrueSkill',
-        x=testing_trueskill,
-        opacity=.75
-    ),
-    go.Histogram(
-        name='Neural Network',
-        x=predictions,
-        opacity=.75
-    )
-]
-layout = go.Layout(barmode='overlay')
-fig = go.Figure(data=vsTrueskill, layout=layout)
-py.plot(fig, filename='neuralvstrueskill')
-
-netvtime = [
-    go.Scatter(
-        name='percentage',
-        x=list(range(len(graph_percentage))),
-        y=graph_percentage,
-        mode='lines'
-    ),
-    go.Scatter(
-        name='correlation',
-        x=list(range(len(graph_correlation))),
-        y=graph_correlation,
-        mode='lines'
-    ),
-    go.Scatter(
-        name='trueskill percentage',
-        x=list(range(len(graph_percentage))),
-        y=graph_ts_percentage,
-        mode='lines'
-    ),
-    go.Scatter(
-        name='trueskill correlation',
-        x=list(range(len(graph_correlation))),
-        y=graph_ts_correlation,
-        mode='lines'
-    )
-]
-py.plot(netvtime, filename='netvtime')
+# ''' Analysis '''
+#
+# # for param in net.parameters():
+# #     print(param.data)
+#
+# vsTrueskill = [
+#     go.Histogram(
+#         name='TrueSkill',
+#         x=testing_trueskill,
+#         opacity=.75
+#     ),
+#     go.Histogram(
+#         name='Neural Network',
+#         x=predictions,
+#         opacity=.75
+#     )
+# ]
+# layout = go.Layout(barmode='overlay')
+# fig = go.Figure(data=vsTrueskill, layout=layout)
+# py.plot(fig, filename='neuralvstrueskill')
+#
+# netvtime = [
+#     go.Scatter(
+#         name='percentage',
+#         x=list(range(len(graph_percentage))),
+#         y=graph_percentage,
+#         mode='lines'
+#     ),
+#     go.Scatter(
+#         name='correlation',
+#         x=list(range(len(graph_correlation))),
+#         y=graph_correlation,
+#         mode='lines'
+#     ),
+#     go.Scatter(
+#         name='trueskill percentage',
+#         x=list(range(len(graph_percentage))),
+#         y=graph_ts_percentage,
+#         mode='lines'
+#     ),
+#     go.Scatter(
+#         name='trueskill correlation',
+#         x=list(range(len(graph_correlation))),
+#         y=graph_ts_correlation,
+#         mode='lines'
+#     )
+# ]
+# py.plot(netvtime, filename='netvtime')
 
 
 ''' Sample Run
