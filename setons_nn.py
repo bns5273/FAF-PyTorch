@@ -1,4 +1,4 @@
-from numpy import mean
+from numpy import mean, corrcoef
 import pandas as pd
 import random
 import json
@@ -7,12 +7,12 @@ import plotly.graph_objs as go
 import plotly.plotly as py
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 
 
 # determines the winning team based on player scores
-def winner(team):
-    return max([team[x]['score'] for x in range(4)]) > 0
+def winner(players):
+    return any([p['score'] == 10 for p in players])
 
 
 # confirms a match as valid
@@ -24,7 +24,7 @@ def validate(players):
             return False
         if player['faction'] > 4:           # modded faction
             return False
-    if winner(players[0::2]) == winner(players[1::2]):  # corrupt replay
+    if not any([p['score'] == 10 for p in players]):  # corrupt replay
         return False
     return True
 
@@ -82,129 +82,73 @@ class SetonsDataset(Dataset):
         return self.data[idx]
 
 
-# CUDA for PyTorch
-use_cuda = torch.cuda.is_available()
-device = torch.device("cuda:0" if use_cuda else "cpu")
-print('cuda: ', use_cuda)
+if __name__ == '__main__':
+    # use_cuda = torch.cuda.is_available()
+    use_cuda = False
+    device = torch.device("cuda:0" if use_cuda else "cpu")
+    torch.set_printoptions(threshold=5000, precision=3, linewidth=200)
 
-torch.set_printoptions(threshold=5000, precision=3, linewidth=200)
-data = SetonsDataset('setons.json')
-head = data[0]
-print(len(data), 'matches')
-print(head)
+    net = nn.Sequential(
+        nn.BatchNorm2d(2),  # Bx2x4x8
+        View(-1, 64),       # 2x4x8 -> 1x1x64
+        nn.Linear(64, 256),
+        nn.ReLU(),
+        nn.Linear(256, 1),
+        View(-1),           # 1x1 int array -> int
+        nn.Sigmoid()        # output layer
+    ).to(device)
 
-epochs = 50
-training_gen = DataLoader(data, batch_size=50, shuffle=True, num_workers=2)
+    loss_fn = nn.MSELoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=.005)
+    data = SetonsDataset('setons.json')
+    len_data = len(data)
+    epochs = 50
 
-net = nn.Sequential(
-    nn.BatchNorm2d(2),  # Bx2x4x8
-    View(-1, 64),       # 2x4x8 -> 1x1x64
-    nn.Linear(64, 128),
-    nn.ReLU(),
-    nn.Linear(128, 1),
-    View(-1),           # 1x1 int array -> int
-    nn.Sigmoid()        # output layer
-)
+    print(len_data, 'cases')
+    print('cuda: ', use_cuda)
 
-loss_fn = nn.MSELoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=.005)
+    graph_percentage = []
+    graph_correlation = []
+    for epoch in range(epochs):
+        training_gen = DataLoader(data[1000:], batch_size=50, shuffle=True, num_workers=2)
+        validation_gen = DataLoader(data[:1000], num_workers=2)
 
-# graph_correlation = []
-# graph_percentage = []
-# graph_ts_correlation = []
-# graph_ts_percentage = []
-# for j in range(epochs):
-#     training_data, training_labels = zip(*random.sample(list(zip(matches, results)), 40000))
-#     testing_data, testing_labels = zip(*random.sample(list(zip(matches, results)), 1000))
-#
-#     # training
-#     for i in range(0, len(training_data), batch_size):
-#         x = torch.stack(training_data[i:i + batch_size])
-#         y = torch.Tensor(training_labels[i:i + batch_size])
-#
-#         y_pred = net(x)
-#         loss = loss_fn(y_pred, y)
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#
-#     # testing
-#     predictions = []
-#     coin_predict = []
-#     coin_ts_predict = []
-#     for t in range(0, len(testing_data), batch_size):
-#         x = torch.stack(testing_data[t:t + batch_size])
-#         predictions += list(net(x).data)
-#     for p, t, r in zip(predictions, testing_trueskill, testing_labels):
-#         coin_predict.append((p.data > .5) == r)
-#         coin_ts_predict.append((t > .5) == r)
-#
-#     graph_correlation.append(np.corrcoef(predictions, testing_labels)[0][1])
-#     graph_percentage.append(np.mean(coin_predict))
-#     graph_ts_correlation.append(np.corrcoef(testing_trueskill, testing_labels)[0][1])
-#     graph_ts_percentage.append(np.mean(coin_ts_predict))
-#     print(j, graph_percentage[-1], graph_correlation[-1])
+        # training
+        for batch, batch_labels in training_gen:
+            batch, batch_labels = batch.to(device), batch_labels.to(device)
+            y_pred = net(batch)
+            loss = loss_fn(y_pred, batch_labels.float())
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
+        # validation
+        predictions = []
+        labels = []
+        coin_flip = []
+        for match, label in validation_gen:
+            match, label = match.to(device), label.to(device)
+            predictions.append(float(net(match)))
+            labels.append(bool(label))
+            coin_flip.append((predictions[-1] > .5) == bool(label))
+        graph_percentage.append(mean(coin_flip))
+        graph_correlation.append(corrcoef(predictions, labels)[0][1])
+        print(epoch, graph_percentage[-1], graph_correlation[-1])
 
-# ''' Analysis '''
-#
-# # for param in net.parameters():
-# #     print(param.data)
-#
-# vsTrueskill = [
-#     go.Histogram(
-#         name='TrueSkill',
-#         x=testing_trueskill,
-#         opacity=.75
-#     ),
-#     go.Histogram(
-#         name='Neural Network',
-#         x=predictions,
-#         opacity=.75
-#     )
-# ]
-# layout = go.Layout(barmode='overlay')
-# fig = go.Figure(data=vsTrueskill, layout=layout)
-# py.plot(fig, filename='neuralvstrueskill')
-#
-# netvtime = [
-#     go.Scatter(
-#         name='percentage',
-#         x=list(range(len(graph_percentage))),
-#         y=graph_percentage,
-#         mode='lines'
-#     ),
-#     go.Scatter(
-#         name='correlation',
-#         x=list(range(len(graph_correlation))),
-#         y=graph_correlation,
-#         mode='lines'
-#     ),
-#     go.Scatter(
-#         name='trueskill percentage',
-#         x=list(range(len(graph_percentage))),
-#         y=graph_ts_percentage,
-#         mode='lines'
-#     ),
-#     go.Scatter(
-#         name='trueskill correlation',
-#         x=list(range(len(graph_correlation))),
-#         y=graph_ts_correlation,
-#         mode='lines'
-#     )
-# ]
-# py.plot(netvtime, filename='netvtime')
+    ''' Analysis '''
 
-
-''' Sample Run
-...
-491 0.912 0.8488968814028814
-492 0.887 0.796355651765359
-493 0.92 0.8546175814834017
-494 0.906 0.8338445591501401
-495 0.901 0.8343490898674357
-496 0.899 0.8295045544916277
-497 0.906 0.8286187419581098
-498 0.904 0.8364858446798663
-499 0.91 0.8412758365749676
-'''
+    netvtime = [
+        go.Scatter(
+            name='percentage',
+            x=list(range(len(graph_percentage))),
+            y=graph_percentage,
+            mode='lines'
+        ),
+        go.Scatter(
+            name='correlation',
+            x=list(range(len(graph_correlation))),
+            y=graph_correlation,
+            mode='lines'
+        )
+    ]
+    py.plot(netvtime, filename='netvtime')
