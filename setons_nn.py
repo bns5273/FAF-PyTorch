@@ -99,7 +99,7 @@ if __name__ == '__main__':
     ).to(device)
 
     loss_fn = nn.MSELoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=.005)
+    optimizer = torch.optim.Adam(net.parameters(), lr=.001)
     data = SetonsDataset('setons.json')
     len_data = len(data)
     epochs = 50
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
         # training
         for batch, batch_labels in training_gen:
-            batch, batch_labels = batch.to(device), batch_labels.to(device)
+            # batch, batch_labels = batch.to(device), batch_labels.to(device)
             y_pred = net(batch)
             loss = loss_fn(y_pred, batch_labels.float())
             optimizer.zero_grad()
@@ -127,7 +127,7 @@ if __name__ == '__main__':
         labels = []
         coin_flip = []
         for match, label in validation_gen:
-            match, label = match.to(device), label.to(device)
+            # match, label = match.to(device), label.to(device)
             predictions.append(float(net(match)))
             labels.append(bool(label))
             coin_flip.append((predictions[-1] > .5) == bool(label))
